@@ -197,7 +197,7 @@ class Driver(driver.Driver):
                 f"state: {nodegroup.status} in cluster {cluster.uuid}"
             )
         elif ng_state == NodeGroupState.READY:
-            # Always update node_addresses from CAPI machines
+            # Try to update node_addresses from CAPI machines
             # This ensures IPs are refreshed even after auto-scaling/healing
             new_node_addresses = self._get_nodegroup_node_addresses(
                 cluster, nodegroup
@@ -213,18 +213,21 @@ class Driver(driver.Driver):
                 )
                 status_changed = True
             
-            addresses_changed = (
-                set(nodegroup.node_addresses or []) != set(new_node_addresses)
-            )
-            
-            if addresses_changed:
-                nodegroup.node_addresses = new_node_addresses
+            # Only update addresses if we got valid data (not None)
+            # None means machines exist but don't have IPs yet
+            addresses_changed = False
+            if new_node_addresses is not None:
+                addresses_changed = (
+                    set(nodegroup.node_addresses or []) != set(new_node_addresses)
+                )
+                if addresses_changed:
+                    nodegroup.node_addresses = new_node_addresses
             
             if status_changed or addresses_changed:
                 LOG.debug(
                     f"Node group ready: {nodegroup.name} "
                     f"in cluster {cluster.uuid} "
-                    f"with {len(nodegroup.node_addresses)} node addresses "
+                    f"with {len(nodegroup.node_addresses or [])} node addresses "
                     f"(status_changed={status_changed}, addresses_changed={addresses_changed})"
                 )
                 nodegroup.save()
@@ -254,7 +257,12 @@ class Driver(driver.Driver):
         return nodegroup
 
     def _get_nodegroup_node_addresses(self, cluster, nodegroup):
-        """Get node IP addresses for a nodegroup from CAPI machines."""
+        """Get node IP addresses for a nodegroup from CAPI machines.
+        
+        Returns None if machines exist but don't have addresses yet (still provisioning).
+        Returns [] if no machines found.
+        Returns [IPs] if machines have addresses.
+        """
         cluster_name = driver_utils.chart_release_name(cluster)
         nodegroup_name = driver_utils.sanitized_name(nodegroup.name)
         
@@ -270,17 +278,32 @@ class Driver(driver.Driver):
             driver_utils.cluster_namespace(cluster),
         )
         
+        if not machines:
+            return []
+        
         node_addresses = []
-        if machines:
-            for machine in machines:
-                # Get internal IP from machine status
-                addresses = machine.get("status", {}).get("addresses", [])
+        machines_with_addresses = 0
+        
+        for machine in machines:
+            # Get internal IP from machine status
+            addresses = machine.get("status", {}).get("addresses", [])
+            if addresses:
+                machines_with_addresses += 1
                 for addr in addresses:
-                    # Prefer InternalIP, but also accept Hostname or ExternalIP
+                    # Prefer InternalIP
                     if addr.get("type") == "InternalIP":
                         ip = addr.get("address")
                         if ip and ip not in node_addresses:
                             node_addresses.append(ip)
+        
+        # If we have machines but none have addresses yet, return None
+        # to indicate we should wait (don't overwrite existing addresses with empty list)
+        if machines_with_addresses == 0:
+            LOG.debug(
+                f"Machines exist for {nodegroup.name} in cluster {cluster.uuid} "
+                f"but none have addresses yet (still provisioning)"
+            )
+            return None
         
         return node_addresses
 
@@ -477,6 +500,16 @@ class Driver(driver.Driver):
                 LOG.debug(f"Node groups are not all ready for {cluster.uuid}")
                 return
             self._update_status_updating(cluster, capi_cluster)
+
+        elif cluster.status in {
+            fields.ClusterStatus.CREATE_COMPLETE,
+            fields.ClusterStatus.UPDATE_COMPLETE,
+        }:
+            # For COMPLETE clusters, still update nodegroups to refresh node_addresses
+            # This handles auto-scaling and auto-healing scenarios
+            if capi_cluster:
+                LOG.debug("Updating node addresses for %s", cluster.uuid)
+                self._update_all_nodegroups_status(cluster)
 
         elif cluster.status == fields.ClusterStatus.DELETE_IN_PROGRESS:
             LOG.debug("Checking on a delete for %s", cluster.uuid)
