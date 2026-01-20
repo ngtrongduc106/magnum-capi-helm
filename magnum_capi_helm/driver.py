@@ -140,6 +140,12 @@ class Driver(driver.Driver):
             and (updated_replicas or current_replicas) == ready_replicas
         ):
             ng_state = NodeGroupState.READY
+            # Fetch node addresses for control plane when ready
+            new_node_addresses = self._get_nodegroup_node_addresses(
+                cluster, nodegroup, "control-plane", "control-plane"
+            )
+            if new_node_addresses is not None:
+                nodegroup.node_addresses = new_node_addresses
 
         # TODO(mkjpryor) Work out a way to determine FAILED state
         return self._update_nodegroup_status(cluster, nodegroup, ng_state)

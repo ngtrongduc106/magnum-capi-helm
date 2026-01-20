@@ -156,7 +156,7 @@ capi_helm_opts = [
         "k8s_control_plane_resource_conditions",
         default=[
             "MachinesReady",
-            "Ready",
+            "Available",
             "EtcdClusterHealthy",
             "ControlPlaneComponentsHealthy",
         ],
