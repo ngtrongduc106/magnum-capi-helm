@@ -317,7 +317,7 @@ class OpenstackCluster(Resource):
     api_version = (
         json.loads(CONF.capi_helm.api_resources)
         .get("OpenstackCluster", {})
-        .get("api_version", "infrastructure.cluster.x-k8s.io/v1beta1")
+        .get("api_version", "infrastructure.cluster.x-k8s.io/v1beta2")
     )
 
 

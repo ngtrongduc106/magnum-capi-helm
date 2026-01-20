@@ -142,11 +142,11 @@ capi_helm_opts = [
             "Example:"
             '{
                 "K8sControlPlane": {
-                    "api_version": "controlplane.cluster.x-k8s.io/v1beta1",
+                    "api_version": "controlplane.cluster.x-k8s.io/v1beta2",
                     "plural_name": "kubeadmcontrolplanes"
                 },
                 "OpenstackCluster": {
-                    "api_version": "infrastructure.cluster.x-k8s.io/v1beta1",
+                    "api_version": "infrastructure.cluster.x-k8s.io/v1beta2",
                 },
             }'
             """
