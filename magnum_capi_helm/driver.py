@@ -114,6 +114,13 @@ class Driver(driver.Driver):
         current_replicas = kcp_status.get("replicas")
         updated_replicas = kcp_status.get("updatedReplicas")
         ready_replicas = kcp_status.get("readyReplicas")
+        
+        LOG.debug(
+            f"Control plane status for {nodegroup.name} in cluster {cluster.uuid}: "
+            f"kcp_ready={kcp_ready}, target={target_replicas}, current={current_replicas}, "
+            f"updated={updated_replicas}, ready={ready_replicas}"
+        )
+        
         if (
             kcp_ready
             and target_replicas == current_replicas
