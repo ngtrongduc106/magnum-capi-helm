@@ -203,6 +203,11 @@ class Driver(driver.Driver):
                 cluster, nodegroup
             )
             
+            LOG.debug(
+                f"Got node addresses for {nodegroup.name}: {new_node_addresses} "
+                f"(current: {nodegroup.node_addresses})"
+            )
+            
             # Only save if status or node_addresses changed
             status_changed = False
             if is_create_operation or is_update_operation:
@@ -222,6 +227,11 @@ class Driver(driver.Driver):
                 )
                 if addresses_changed:
                     nodegroup.node_addresses = new_node_addresses
+            else:
+                LOG.debug(
+                    f"Skipping node_addresses update for {nodegroup.name} - "
+                    f"machines not ready yet"
+                )
             
             if status_changed or addresses_changed:
                 LOG.debug(
@@ -269,6 +279,11 @@ class Driver(driver.Driver):
         # Determine the component type based on nodegroup role
         component = "control-plane" if nodegroup.role == "master" else "worker"
         
+        LOG.debug(
+            f"Fetching machines for nodegroup {nodegroup.name} (role={nodegroup.role}, "
+            f"component={component}) in cluster {cluster.uuid}"
+        )
+        
         machines = self._k8s_client.get_all_machines_by_label(
             {
                 "capi.stackhpc.com/cluster": cluster_name,
@@ -279,12 +294,16 @@ class Driver(driver.Driver):
         )
         
         if not machines:
+            LOG.debug(f"No machines found for {nodegroup.name} in cluster {cluster.uuid}")
             return []
+        
+        LOG.debug(f"Found {len(machines)} machines for {nodegroup.name} in cluster {cluster.uuid}")
         
         node_addresses = []
         machines_with_addresses = 0
         
         for machine in machines:
+            machine_name = machine.get("metadata", {}).get("name", "unknown")
             # Get internal IP from machine status
             addresses = machine.get("status", {}).get("addresses", [])
             if addresses:
@@ -295,16 +314,23 @@ class Driver(driver.Driver):
                         ip = addr.get("address")
                         if ip and ip not in node_addresses:
                             node_addresses.append(ip)
+                            LOG.debug(f"  Machine {machine_name}: IP {ip}")
+            else:
+                LOG.debug(f"  Machine {machine_name}: no addresses yet")
         
         # If we have machines but none have addresses yet, return None
         # to indicate we should wait (don't overwrite existing addresses with empty list)
         if machines_with_addresses == 0:
             LOG.debug(
                 f"Machines exist for {nodegroup.name} in cluster {cluster.uuid} "
-                f"but none have addresses yet (still provisioning)"
+                f"but none have addresses yet (still provisioning) - returning None"
             )
             return None
         
+        LOG.debug(
+            f"Returning {len(node_addresses)} addresses for {nodegroup.name} "
+            f"in cluster {cluster.uuid}: {node_addresses}"
+        )
         return node_addresses
 
     def _nodegroup_machines_exist(self, cluster, nodegroup):
