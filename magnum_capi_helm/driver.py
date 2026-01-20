@@ -412,7 +412,9 @@ class Driver(driver.Driver):
             f"Checking cluster completion for {cluster.uuid}: "
             f"true_conditions={true_conditions}"
         )
-        for cond in ("InfrastructureReady", "ControlPlaneReady", "Ready"):
+        # Check for required CAPI Cluster conditions
+        # Note: CAPI Cluster uses "Available" not "Ready", and "ControlPlaneAvailable" not "ControlPlaneReady"
+        for cond in ("InfrastructureReady", "ControlPlaneAvailable", "Available"):
             if cond not in true_conditions:
                 LOG.debug(
                     f"Cluster {cluster.uuid} not ready: missing condition {cond}"
