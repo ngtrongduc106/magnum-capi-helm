@@ -106,10 +106,20 @@ class Driver(driver.Driver):
             for cond in kcp_status.get("conditions", [])
             if cond["status"] == "True"
         }
+        required_conditions = CONF.capi_helm.k8s_control_plane_resource_conditions
         kcp_ready = all(
             cond in kcp_true_conditions
-            for cond in CONF.capi_helm.k8s_control_plane_resource_conditions
+            for cond in required_conditions
         )
+        
+        if not kcp_ready:
+            missing_conditions = set(required_conditions) - kcp_true_conditions
+            LOG.debug(
+                f"Control plane not ready for {nodegroup.name}: "
+                f"missing conditions {missing_conditions}, "
+                f"has conditions {kcp_true_conditions}"
+            )
+        
         target_replicas = kcp_spec.get("replicas")
         current_replicas = kcp_status.get("replicas")
         updated_replicas = kcp_status.get("updatedReplicas")
@@ -121,11 +131,13 @@ class Driver(driver.Driver):
             f"updated={updated_replicas}, ready={ready_replicas}"
         )
         
+        # Handle None values for replica counts - treat None as 0
+        # KubeAdmControlPlane may not set updatedReplicas initially
         if (
             kcp_ready
             and target_replicas == current_replicas
-            and current_replicas == updated_replicas
-            and updated_replicas == ready_replicas
+            and current_replicas == (updated_replicas or current_replicas)
+            and (updated_replicas or current_replicas) == ready_replicas
         ):
             ng_state = NodeGroupState.READY
 
