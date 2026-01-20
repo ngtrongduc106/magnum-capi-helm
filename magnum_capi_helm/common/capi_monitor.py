@@ -162,10 +162,16 @@ class CAPIMonitor(monitors.MonitorBase):
         if not resource_kcp:
             return "Control plane resource not found."
 
+        # Only check positive conditions that should be True
+        # Negative conditions (RollingOut, Remediating, etc) should be False
+        positive_conditions = ["Ready", "Available", "MachinesReady", 
+                               "EtcdClusterHealthy", "ControlPlaneComponentsHealthy"]
+        
         conditions = [
             c.get("type")
             for c in resource_kcp.get("status", {}).get("conditions", {})
-            if c.get("status") != "True"
+            # if c.get("status") != "True"
+            if c.get("type") in positive_conditions and c.get("status") != "True"
         ]
         if conditions:
             return f"Waiting on {conditions}"
@@ -195,11 +201,16 @@ class CAPIMonitor(monitors.MonitorBase):
                     f"{nodegroup.name} resource not found."
                 )
                 continue
+            
+            # Only check positive conditions that should be True
+            # Negative conditions (RollingOut, Remediating, ScalingUp, etc) should be False
+            positive_conditions = ["Ready", "Available"]
 
             conditions = [
                 c.get("type")
                 for c in resource_md.get("status", {}).get("conditions", {})
-                if c.get("status") != "True"
+                # if c.get("status") != "True"
+                if c.get("type") in positive_conditions and c.get("status") != "True"
             ]
             if conditions:
                 nodegroup_reasons.append(
