@@ -111,10 +111,15 @@ class CAPIMonitor(monitors.MonitorBase):
         if not resource_cluster:
             return "Cluster resource not found."
 
+        # Only check positive conditions that should be True
+        # Negative conditions (RollingOut, Remediating, ScalingDown, etc) should be False
+        positive_conditions = ["Ready", "ControlPlaneReady", "InfrastructureReady"]
+        
         cluster_conditions = [
             c.get("type")
             for c in resource_cluster.get("status", {}).get("conditions", {})
-            if c.get("status") != "True"
+            # if c.get("status") != "True"
+            if c.get("type") in positive_conditions and c.get("status") != "True"
         ]
         if cluster_conditions:
             return f"Waiting on {cluster_conditions}"
