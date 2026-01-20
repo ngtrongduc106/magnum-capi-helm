@@ -307,12 +307,17 @@ class Driver(driver.Driver):
             f"component={component}) in cluster {cluster.uuid}"
         )
         
+        # Build label selector - control-plane machines don't have node-group label
+        label_selector = {
+            "capi.stackhpc.com/cluster": cluster_name,
+            "capi.stackhpc.com/component": component,
+        }
+        # Only add node-group label for worker nodes (control-plane doesn't have it)
+        if component == "worker":
+            label_selector["capi.stackhpc.com/node-group"] = nodegroup_name
+        
         machines = self._k8s_client.get_all_machines_by_label(
-            {
-                "capi.stackhpc.com/cluster": cluster_name,
-                "capi.stackhpc.com/component": component,
-                "capi.stackhpc.com/node-group": nodegroup_name,
-            },
+            label_selector,
             driver_utils.cluster_namespace(cluster),
         )
         
