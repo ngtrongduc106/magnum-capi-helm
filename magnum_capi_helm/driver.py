@@ -200,9 +200,14 @@ class Driver(driver.Driver):
                 if is_update_operation
                 else fields.ClusterStatus.CREATE_COMPLETE
             )
+            # Update node_addresses from CAPI machines
+            nodegroup.node_addresses = self._get_nodegroup_node_addresses(
+                cluster, nodegroup
+            )
             LOG.debug(
                 f"Node group ready: {nodegroup.name} "
-                f"in cluster {cluster.uuid}"
+                f"in cluster {cluster.uuid} "
+                f"with {len(nodegroup.node_addresses)} node addresses"
             )
             nodegroup.save()
 
@@ -229,6 +234,37 @@ class Driver(driver.Driver):
             )
 
         return nodegroup
+
+    def _get_nodegroup_node_addresses(self, cluster, nodegroup):
+        """Get node IP addresses for a nodegroup from CAPI machines."""
+        cluster_name = driver_utils.chart_release_name(cluster)
+        nodegroup_name = driver_utils.sanitized_name(nodegroup.name)
+        
+        # Determine the component type based on nodegroup role
+        component = "control-plane" if nodegroup.role == "master" else "worker"
+        
+        machines = self._k8s_client.get_all_machines_by_label(
+            {
+                "capi.stackhpc.com/cluster": cluster_name,
+                "capi.stackhpc.com/component": component,
+                "capi.stackhpc.com/node-group": nodegroup_name,
+            },
+            driver_utils.cluster_namespace(cluster),
+        )
+        
+        node_addresses = []
+        if machines:
+            for machine in machines:
+                # Get internal IP from machine status
+                addresses = machine.get("status", {}).get("addresses", [])
+                for addr in addresses:
+                    # Prefer InternalIP, but also accept Hostname or ExternalIP
+                    if addr.get("type") == "InternalIP":
+                        ip = addr.get("address")
+                        if ip and ip not in node_addresses:
+                            node_addresses.append(ip)
+        
+        return node_addresses
 
     def _nodegroup_machines_exist(self, cluster, nodegroup):
         cluster_name = driver_utils.chart_release_name(cluster)
