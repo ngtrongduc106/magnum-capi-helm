@@ -21,6 +21,7 @@ from magnum.common import exception
 from magnum.common import neutron
 from magnum.common import short_id
 from magnum.drivers.common import driver
+from magnum import objects
 from magnum.objects import fields
 from oslo_log import log as logging
 from oslo_utils import strutils
