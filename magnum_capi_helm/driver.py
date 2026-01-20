@@ -141,9 +141,7 @@ class Driver(driver.Driver):
         ):
             ng_state = NodeGroupState.READY
             # Fetch node addresses for control plane when ready
-            new_node_addresses = self._get_nodegroup_node_addresses(
-                cluster, nodegroup, "control-plane", "control-plane"
-            )
+            new_node_addresses = self._get_nodegroup_node_addresses(cluster, nodegroup)
             if new_node_addresses is not None:
                 nodegroup.node_addresses = new_node_addresses
 
