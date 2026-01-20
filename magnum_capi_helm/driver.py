@@ -460,6 +460,53 @@ class Driver(driver.Driver):
                 )
                 return
 
+        # Check that all nodegroups have machines with IP addresses
+        # This ensures we don't mark as COMPLETE before resize/scale operations finish
+        nodegroups = objects.NodeGroup.list(cluster.context, cluster.uuid)
+        for nodegroup in nodegroups:
+            # Get expected replica count
+            if nodegroup.role == "master":
+                kcp = self._k8s_client.get_k8s_control_plane(
+                    driver_utils.get_k8s_resource_name(cluster, "control-plane"),
+                    driver_utils.cluster_namespace(cluster),
+                )
+                expected_replicas = kcp.get("spec", {}).get("replicas", 0) if kcp else 0
+            else:
+                md = self._k8s_client.get_machine_deployment(
+                    driver_utils.get_k8s_resource_name(cluster, nodegroup.name),
+                    driver_utils.cluster_namespace(cluster),
+                )
+                expected_replicas = md.get("spec", {}).get("replicas", 0) if md else 0
+            
+            # Get current node addresses
+            node_addresses = self._get_nodegroup_node_addresses(cluster, nodegroup)
+            actual_count = len(node_addresses) if node_addresses else 0
+            
+            # Only check if we have FEWER machines than expected (scale UP scenario)
+            # Scale DOWN is OK even if machines being deleted still show up
+            if actual_count < expected_replicas:
+                # If machines exist but don't have addresses yet (None), wait
+                if node_addresses is None:
+                    LOG.debug(
+                        f"Nodegroup {nodegroup.name} machines exist but don't have IPs yet "
+                        f"for cluster {cluster.uuid} - waiting for provisioning to complete"
+                    )
+                    return
+                
+                # We don't have enough IPs for expected replicas, wait for scale up
+                LOG.debug(
+                    f"Nodegroup {nodegroup.name} has {actual_count} IPs but expects "
+                    f"{expected_replicas} replicas for cluster {cluster.uuid} - waiting for scale up"
+                )
+                return
+            
+            LOG.debug(
+                f"Nodegroup {nodegroup.name} has {actual_count} IPs, expects {expected_replicas} "
+                f"for cluster {cluster.uuid} - OK"
+            )
+        
+        LOG.debug(f"All nodegroups have sufficient machines with IPs for cluster {cluster.uuid}")
+
         # If we get this far, the cluster has completed successfully
         LOG.debug(f"All checks passed, marking cluster {cluster.uuid} as complete")
         cluster.status = (
