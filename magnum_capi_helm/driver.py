@@ -408,8 +408,15 @@ class Driver(driver.Driver):
             for cond in capi_cluster.get("status", {}).get("conditions", [])
             if cond["status"] == "True"
         }
+        LOG.debug(
+            f"Checking cluster completion for {cluster.uuid}: "
+            f"true_conditions={true_conditions}"
+        )
         for cond in ("InfrastructureReady", "ControlPlaneReady", "Ready"):
             if cond not in true_conditions:
+                LOG.debug(
+                    f"Cluster {cluster.uuid} not ready: missing condition {cond}"
+                )
                 return
 
         is_update_operation = cluster.status.startswith("UPDATE_")
@@ -423,8 +430,13 @@ class Driver(driver.Driver):
             },
             driver_utils.cluster_namespace(cluster),
         )
+        LOG.debug(f"Found {len(addons)} addons for cluster {cluster.uuid}")
         for addon in addons:
+            addon_name = addon.get('metadata', {}).get('name', 'unknown')
             addon_phase = addon.get("status", {}).get("phase")
+            LOG.debug(
+                f"Addon {addon_name} status: phase={addon_phase}"
+            )
             if addon_phase and addon_phase in {"Failed", "Unknown"}:
                 # If the addon is failed, mark the cluster as failed
                 cluster.status = (
@@ -441,12 +453,13 @@ class Driver(driver.Driver):
                 # If there are any addons that are not deployed or failed,
                 # wait for the next invocation to check again
                 LOG.debug(
-                    f"addon {addon['metadata']['name']} not yet deployed "
-                    f"for {cluster.uuid}"
+                    f"addon {addon_name} not yet deployed "
+                    f"for {cluster.uuid}, current phase: {addon_phase}"
                 )
                 return
 
         # If we get this far, the cluster has completed successfully
+        LOG.debug(f"All checks passed, marking cluster {cluster.uuid} as complete")
         cluster.status = (
             fields.ClusterStatus.UPDATE_COMPLETE
             if is_update_operation
