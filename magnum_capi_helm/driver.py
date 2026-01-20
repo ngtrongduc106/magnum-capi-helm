@@ -189,27 +189,45 @@ class Driver(driver.Driver):
 
         is_update_operation = nodegroup.status.startswith("UPDATE_")
         is_create_operation = nodegroup.status.startswith("CREATE_")
-        if not is_update_operation and not is_create_operation:
+        is_complete = nodegroup.status.endswith("_COMPLETE")
+        
+        if not is_update_operation and not is_create_operation and not is_complete:
             LOG.warning(
                 f"Node group: {nodegroup.name} in unexpected "
                 f"state: {nodegroup.status} in cluster {cluster.uuid}"
             )
         elif ng_state == NodeGroupState.READY:
-            nodegroup.status = (
-                fields.ClusterStatus.UPDATE_COMPLETE
-                if is_update_operation
-                else fields.ClusterStatus.CREATE_COMPLETE
-            )
-            # Update node_addresses from CAPI machines
-            nodegroup.node_addresses = self._get_nodegroup_node_addresses(
+            # Always update node_addresses from CAPI machines
+            # This ensures IPs are refreshed even after auto-scaling/healing
+            new_node_addresses = self._get_nodegroup_node_addresses(
                 cluster, nodegroup
             )
-            LOG.debug(
-                f"Node group ready: {nodegroup.name} "
-                f"in cluster {cluster.uuid} "
-                f"with {len(nodegroup.node_addresses)} node addresses"
+            
+            # Only save if status or node_addresses changed
+            status_changed = False
+            if is_create_operation or is_update_operation:
+                nodegroup.status = (
+                    fields.ClusterStatus.UPDATE_COMPLETE
+                    if is_update_operation
+                    else fields.ClusterStatus.CREATE_COMPLETE
+                )
+                status_changed = True
+            
+            addresses_changed = (
+                set(nodegroup.node_addresses or []) != set(new_node_addresses)
             )
-            nodegroup.save()
+            
+            if addresses_changed:
+                nodegroup.node_addresses = new_node_addresses
+            
+            if status_changed or addresses_changed:
+                LOG.debug(
+                    f"Node group ready: {nodegroup.name} "
+                    f"in cluster {cluster.uuid} "
+                    f"with {len(nodegroup.node_addresses)} node addresses "
+                    f"(status_changed={status_changed}, addresses_changed={addresses_changed})"
+                )
+                nodegroup.save()
 
         elif ng_state == NodeGroupState.FAILED:
             nodegroup.status = (
