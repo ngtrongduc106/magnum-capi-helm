@@ -401,7 +401,7 @@ class Driver(driver.Driver):
                 cluster.save()
                 LOG.debug(f"Found api_address for {cluster.uuid}")
 
-    def _update_status_updating(self, cluster, capi_cluster):
+    def _update_status_updating(self, context, cluster, capi_cluster):
         # If the cluster is not yet ready then the create/update
         # is still in progress
         true_conditions = {
@@ -463,7 +463,7 @@ class Driver(driver.Driver):
 
         # Check that all nodegroups have machines with IP addresses
         # This ensures we don't mark as COMPLETE before resize/scale operations finish
-        nodegroups = objects.NodeGroup.list(cluster.context, cluster.uuid)
+        nodegroups = objects.NodeGroup.list(context, cluster.uuid)
         for nodegroup in nodegroups:
             # Get expected replica count
             if nodegroup.role == "master":
@@ -616,7 +616,7 @@ class Driver(driver.Driver):
             if nodegroups_in_progress:
                 LOG.debug(f"Node groups are not all ready for {cluster.uuid}")
                 return
-            self._update_status_updating(cluster, capi_cluster)
+            self._update_status_updating(context, cluster, capi_cluster)
 
         elif cluster.status in {
             fields.ClusterStatus.CREATE_COMPLETE,
