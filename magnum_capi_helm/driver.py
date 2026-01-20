@@ -1029,6 +1029,21 @@ class Driver(driver.Driver):
             }
             values = helm.mergeconcat(values, network_details)
 
+        net_driver = cluster.cluster_template.network_driver
+        cni_driver = "calico"
+        if net_driver:
+            cni_driver = net_driver
+        if cni_driver:
+          cni_config = {
+            "addons": {
+                "cni": {
+                    "enabled": True,
+                    "type": cni_driver,
+                }
+            }
+          }
+          values = helm.mergeconcat(values, cni_config)
+
         if self._get_k8s_keystone_auth_enabled(cluster):
             k8s_keystone_auth_config = {
                 "authWebhook": "k8s-keystone-auth",

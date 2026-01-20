@@ -309,7 +309,7 @@ class Cluster(Resource):
     api_version = (
         json.loads(CONF.capi_helm.api_resources)
         .get("Cluster", {})
-        .get("api_version", "cluster.x-k8s.io/v1beta1")
+        .get("api_version", "cluster.x-k8s.io/v1beta2")
     )
 
 
@@ -325,7 +325,7 @@ class MachineDeployment(Resource):
     api_version = (
         json.loads(CONF.capi_helm.api_resources)
         .get("MachineDeployment", {})
-        .get("api_version", "cluster.x-k8s.io/v1beta1")
+        .get("api_version", "cluster.x-k8s.io/v1beta2")
     )
 
 
@@ -333,7 +333,7 @@ class K8sControlPlane(Resource):
     api_version = (
         json.loads(CONF.capi_helm.api_resources)
         .get("K8sControlPlane", {})
-        .get("api_version", "controlplane.cluster.x-k8s.io/v1beta1")
+        .get("api_version", "controlplane.cluster.x-k8s.io/v1beta2")
     )
     plural_name = (
         json.loads(CONF.capi_helm.api_resources)
@@ -346,7 +346,7 @@ class Machine(Resource):
     api_version = (
         json.loads(CONF.capi_helm.api_resources)
         .get("Machine", {})
-        .get("api_version", "cluster.x-k8s.io/v1beta1")
+        .get("api_version", "cluster.x-k8s.io/v1beta2")
     )
 
 
